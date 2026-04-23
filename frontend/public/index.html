@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Processing System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .container { background: white; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); padding: 40px; max-width: 500px; width: 100%; }
+        h1 { color: #333; margin-bottom: 10px; font-size: 28px; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        input[type="text"]:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        button { width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s; }
+        button:hover { background: #5568d3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .result { margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 5px; }
+        .result h3 { color: #333; margin-bottom: 10px; }
+        .result p { color: #666; margin: 5px 0; font-family: monospace; word-break: break-all; }
+        .error { background: #fee; color: #c33; padding: 12px; border-radius: 5px; margin-top: 10px; }
+        .success { background: #efe; color: #3c3; padding: 12px; border-radius: 5px; margin-top: 10px; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-completed { background: #d4edda; color: #155724; }
+        .status-failed { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Job Processor</h1>
+        <p class="subtitle">Submit and track job processing tasks</p>
+
+        <form id="jobForm">
+            <div class="form-group">
+                <label for="taskInput">Task Description</label>
+                <input type="text" id="taskInput" placeholder="Enter your task..." required />
+            </div>
+            <button type="submit" id="submitBtn">Submit Job</button>
+        </form>
+
+        <div id="resultContainer"></div>
+    </div>
+
+    <script>
+        const API_BASE = "/api";
+
+        document.getElementById("jobForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const task = document.getElementById("taskInput").value;
+
+            const btn = document.getElementById("submitBtn");
+            btn.disabled = true;
+            btn.textContent = "Submitting...";
+
+            try {
+                const response = await fetch(`${API_BASE}/jobs`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ task }),
+                });
+
+                if (!response.ok) throw new Error("Failed to submit job");
+
+                const data = await response.json();
+                const jobId = data.job_id;
+
+                displayResult(`Job submitted successfully!`, "success", jobId);
+                pollJobStatus(jobId);
+            } catch (error) {
+                displayResult(`Error: ${error.message}`, "error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Submit Job";
+            }
+        });
+
+        async function pollJobStatus(jobId) {
+            const resultContainer = document.getElementById("resultContainer");
+            let attempts = 0;
+            const maxAttempts = 60; // 5 minutes with 5s interval
+
+            const poll = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/jobs/${jobId}`);
+                    if (!response.ok) throw new Error("Job not found");
+
+                    const data = await response.json();
+                    const statusClass = `status-${data.status}`;
+                    const resultHTML = `
+                        <div class="result">
+                            <h3>Job Status</h3>
+                            <p><strong>Job ID:</strong> ${data.job_id}</p>
+                            <p><strong>Task:</strong> ${data.task}</p>
+                            <p><strong>Status:</strong> <span class="status-badge ${statusClass}">${data.status.toUpperCase()}</span></p>
+                        </div>
+                    `;
+                    resultContainer.innerHTML = resultHTML;
+
+                    if (data.status === "completed" || data.status === "failed") {
+                        return;
+                    }
+
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, 5000);
+                    } else {
+                        resultContainer.innerHTML += `<div class="error">Job polling timeout</div>`;
+                    }
+                } catch (error) {
+                    resultContainer.innerHTML += `<div class="error">Error polling: ${error.message}</div>`;
+                }
+            };
+
+            poll();
+        }
+
+        function displayResult(message, type, jobId = "") {
+            const resultContainer = document.getElementById("resultContainer");
+            let html = `<div class="${type}">${message}`;
+            if (jobId) html += `<br>Job ID: <code>${jobId}</code>`;
+            html += "</div>";
+            resultContainer.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
+EOF
