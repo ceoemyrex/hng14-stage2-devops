@@ -4,7 +4,7 @@ FROM python:3.11-slim as builder
 
 WORKDIR /build
 COPY requirements.txt .
-RUN pip install --upgrade pip==26.0.1 && \
+RUN pip install --no-cache-dir --upgrade pip==26.0.1 && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM python:3.11-slim
